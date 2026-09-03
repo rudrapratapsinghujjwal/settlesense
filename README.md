@@ -1,6 +1,4 @@
-# ⚡ SettleSense — AI Finance Controller
-
-**Razorpay AI Buildathon · Track 04**
+#  SettleSense — AI Finance Controller
 
 > *"Automate what is certain. Explain what is ambiguous. Escalate what is uncertain."*
 
@@ -214,5 +212,3 @@ razorpay/
 6. **Security by design** — untrusted text fields delimited as data in prompts, never instructions
 
 ---
-
-*Built for Razorpay AI Buildathon · Track 04: AI Finance Controller*

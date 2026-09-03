@@ -1,0 +1,29 @@
+# SettleSense — Pinned Requirements
+# Python >= 3.11 required
+# Pinned for reproducible Docker builds
+
+# Core data
+pandas==3.0.3
+numpy==2.3.1
+
+# ML
+scikit-learn==1.9.0
+
+# Fuzzy matching
+rapidfuzz==3.14.5
+
+# Web UI
+streamlit==1.62.0
+
+# LLM APIs (only one needed)
+anthropic==1.2.0
+openai==2.44.0
+
+# Razorpay SDK
+razorpay==2.0.1
+
+# HTTP client (for direct API calls)
+requests==2.34.2
+
+# Environment management
+python-dotenv==1.2.2

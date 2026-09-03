@@ -1,0 +1,29 @@
+{
+  "entity": "collection",
+  "count": 2,
+  "items": [
+    {
+      "id": "setl_SBahT29XrDOzxf",
+      "entity": "settlement",
+      "amount": 9568,
+      "status": "processed",
+      "fees": 0,
+      "tax": 0,
+      "utr": "d60q90o7druc714b481g",
+      "created_at": 1770103811,
+      "currency": "INR"
+    },
+    {
+      "id": "setl_SBCE9UxkepgUpC",
+      "entity": "settlement",
+      "amount": 14352,
+      "status": "created",
+      "fees": 0,
+      "tax": 0,
+      "utr": "",
+      "created_at": 1770017627,
+      "currency": "INR"
+    }
+  ],
+  "has_more": false
+}

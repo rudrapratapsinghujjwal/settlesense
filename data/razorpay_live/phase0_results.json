@@ -1,0 +1,61 @@
+{
+  "timestamp": "2026-08-30T18:10:09.928952",
+  "key_id_prefix": "rzp_test_TW4...",
+  "is_test_mode": true,
+  "tests": {
+    "create_order": {
+      "success": true,
+      "error": null,
+      "order_id": "order_TW4iRZ4SWLtkLy"
+    },
+    "fetch_payments": {
+      "success": true,
+      "count": 5,
+      "error": null,
+      "actual_fields": [
+        "id",
+        "entity",
+        "amount",
+        "amount_captured",
+        "currency",
+        "status",
+        "order_id",
+        "invoice_id",
+        "international",
+        "method",
+        "amount_refunded",
+        "refund_status",
+        "captured",
+        "description",
+        "card_id",
+        "bank",
+        "wallet",
+        "vpa",
+        "email",
+        "contact",
+        "notes",
+        "fee",
+        "tax",
+        "error_code",
+        "error_description",
+        "error_source",
+        "error_step",
+        "error_reason",
+        "acquirer_data",
+        "created_at"
+      ]
+    },
+    "fetch_settlements": {
+      "success": true,
+      "count": 2,
+      "error": null
+    },
+    "settlement_recon_combined": {
+      "status_code": 200,
+      "success": true,
+      "item_count": 0,
+      "populated": false,
+      "conclusion": "EMPTY \u2014 test mode does not auto-populate recon data. Will use schema-accurate synthetic recon data. (Expected behavior)"
+    }
+  }
+}

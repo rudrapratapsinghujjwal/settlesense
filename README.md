@@ -1,0 +1,218 @@
+# ⚡ SettleSense — AI Finance Controller
+
+**Razorpay AI Buildathon · Track 04**
+
+> *"Automate what is certain. Explain what is ambiguous. Escalate what is uncertain."*
+
+SettleSense is an AI-powered financial reconciliation controller that classifies settlement exceptions, applies calibrated confidence gates, and surfaces human-readable reasoning — while producing measurable, reproducible evaluation metrics.
+
+---
+
+## Demo Results (Mock Mode — tune split)
+
+| Metric | Value |
+|--------|-------|
+| Total processed | 260 records |
+| Clean matched (deterministic) | 170 (65%) |
+| Exceptions found | 90 (35%) |
+| AI auto-resolved | 54 (60% automation) |
+| Human review queued | 36 (40%) |
+| Classification accuracy | 100% (tune split, ground-truth hints) |
+| False auto-resolve rate | **0.0%** |
+| Throughput | ~250 records/sec |
+| Latency (full pipeline) | ~1100ms |
+
+> **Note:** "Mock mode" means a deterministic rule-based classifier replaces the LLM. All signal computation, confidence calibration, and gate logic are identical to production. Set `ANTHROPIC_API_KEY` (format: `sk-ant-...`) or `OPENAI_API_KEY` in `.env` for real Claude/GPT inference.
+
+---
+
+## Architecture
+
+```
+Payments CSV / Razorpay API
+        │
+        ▼
+┌─────────────────────┐
+│  1. Normalization   │  → Unified NormalizedTransaction schema
+│     & Validation   │    Amount in paise, ISO 8601 dates,
+└──────────┬──────────┘    razorpay_id / ledger_id / bank_ref
+           │
+           ▼
+┌─────────────────────┐
+│  2. Deterministic   │  → rapidfuzz fuzzy matching (amount ±2%,
+│     Baseline        │    date proximity, shared reference IDs)
+└──────────┬──────────┘    → clean_matched | unresolved
+           │
+           ▼ (exceptions only)
+┌─────────────────────┐
+│  3. Evidence        │  → Per-category evidence assembler
+│     Assembly        │    Structured facts, NOT raw text
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  4. LLM             │  → Exactly ONE structured call per record
+│     Classification  │    System prompt + JSON schema output
+│     (Claude/GPT)    │    Hallucination check on proposed IDs
+└──────────┬──────────┘    Output validated before use
+           │
+           ▼
+┌─────────────────────┐
+│  5. Confidence      │  → Logistic regression calibrator
+│     Calibration     │    Cold-start: transparent weighted sum
+│     & Gate          │    rule_agreement (40%) + raw_signal (35%)
+└──────────┬──────────┘    + margin (15%) + ev_completeness (10%)
+           │                Gate @ 70% (configurable)
+           ▼
+┌─────────────────────┐
+│  6. Decision        │  → auto_resolved | human_review | escalated
+│     & Audit Trail   │    Immutable SQLite audit log
+└─────────────────────┘
+```
+
+### Exception Categories
+
+| Category | Description |
+|----------|-------------|
+| `split_settlement` | One ledger entry matches multiple partial settlements |
+| `refund_misattribution` | Refund is ambiguous between multiple originating payments |
+| `fee_tier` | Discrepancy explained by applicable fee tier rate |
+| `near_duplicate` | Two transactions may be legitimate or an accidental duplicate |
+| `unresolved` | Insufficient evidence — always escalated to human |
+
+---
+
+## Stack
+
+| Component | Tech |
+|-----------|------|
+| Runtime | Python 3.11+ |
+| Matching | rapidfuzz (Levenshtein, token_sort_ratio) |
+| Confidence | scikit-learn LogisticRegression (cold-start: transparent weighted sum) |
+| LLM | Anthropic Claude 3.5 Sonnet **or** OpenAI GPT-4o (configurable) |
+| Storage | SQLite (WAL mode, immutable audit trail) |
+| UI | Streamlit + custom CSS (Inter font, dark theme) |
+| Deployment | Docker → Hugging Face Spaces (port 7860) |
+| Tests | pytest (51 tests across all modules) |
+
+---
+
+## Quick Start
+
+```bash
+# 1. Clone & install
+pip install -r requirements.txt
+
+# 2. Configure
+cp .env.example .env
+# Edit .env:
+#   RAZORPAY_KEY_ID=rzp_test_...
+#   RAZORPAY_KEY_SECRET=...
+#   ANTHROPIC_API_KEY=sk-ant-...   # or OPENAI_API_KEY=sk-...
+#   LLM_PROVIDER=anthropic          # or openai, or mock
+
+# 3. Seed pipeline (generates synthetic data + runs evaluation)
+python run_pipeline.py
+
+# 4. Launch dashboard
+streamlit run app.py
+# → http://localhost:8501
+```
+
+---
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RAZORPAY_KEY_ID` | — | Razorpay test/live key ID |
+| `RAZORPAY_KEY_SECRET` | — | Razorpay key secret |
+| `ANTHROPIC_API_KEY` | — | Must start with `sk-ant-` |
+| `OPENAI_API_KEY` | — | Must start with `sk-` |
+| `LLM_PROVIDER` | `mock` | `anthropic` / `openai` / `mock` |
+| `LLM_MODEL` | `claude-3-5-sonnet-20241022` | Model name |
+| `CONFIDENCE_THRESHOLD` | `0.70` | Gate threshold (0.0–1.0) |
+| `RANDOM_SEED` | `42` | Reproducibility seed |
+| `LOG_LEVEL` | `INFO` | Python logging level |
+
+---
+
+## Data
+
+All reconciliation data used for development is **schema-accurate synthetic data**, generated by `settlesense/data_generator.py` using a deterministic seed (42). It is:
+- **Not real transaction data** — synthetic Razorpay-format IDs with realistic amounts/timing
+- **Label-leak-free** — holdout answer keys are sealed in a separate directory
+- **Explicitly labeled** in all UI, logs, and outputs as synthetic
+
+Razorpay's test API is used for Phase 0 connectivity verification (order creation, payment fetch, settlement fetch). Real settlement reconciliation data is empty in test mode, which is why synthetic data is required.
+
+---
+
+## Tests
+
+```bash
+pytest tests/ -v
+# 51 tests: normalization, matching, evidence, LLM mock, confidence, security
+```
+
+Security tests cover:
+- Prompt injection attempts via `description` / `notes` fields
+- Hallucinated evidence detection (model cites absent fields → auto-escalate)
+- Schema validation (malformed JSON output → human_review, never silent)
+- SQL injection resistance (parameterized queries throughout)
+
+---
+
+## Docker / Hugging Face Spaces
+
+```bash
+# Local Docker build
+docker build -t settlesense .
+docker run -p 7860:7860 --env-file .env settlesense
+
+# Hugging Face Spaces (automatic via git push)
+# The Dockerfile exposes port 7860 and sets CMD for HF compatibility
+```
+
+---
+
+## Project Structure
+
+```
+razorpay/
+├── app.py                        # Streamlit dashboard (4 views)
+├── run_pipeline.py               # CLI: seed data + run evaluation
+├── Dockerfile                    # HF Spaces-compatible image
+├── docker-compose.yml            # Local dev compose
+├── requirements.txt              # Pinned dependencies
+├── .env.example                  # Config template
+├── settlesense/
+│   ├── config.py                 # Typed config, env loading
+│   ├── types.py                  # Dataclasses: NormalizedTransaction etc.
+│   ├── normalization.py          # Multi-source normalization
+│   ├── matching.py               # Deterministic baseline + candidate gen
+│   ├── evidence.py               # Per-category evidence assembly
+│   ├── classifier.py             # LLM prompt, validation, mock fallback
+│   ├── confidence.py             # Logistic regression calibration
+│   ├── pipeline.py               # End-to-end orchestration
+│   ├── database.py               # SQLite schema, CRUD, audit trail
+│   ├── data_generator.py         # Synthetic data generation (seed=42)
+│   └── razorpay_client.py        # Razorpay API client
+└── tests/
+    └── test_pipeline.py          # 51 unit tests
+```
+
+---
+
+## Design Principles
+
+1. **Automate with confidence** — only auto-resolve when calibrated P(correct) ≥ threshold
+2. **Explain every decision** — structured evidence + LLM reasoning, no black boxes
+3. **Fail safe** — malformed output, hallucination, or API failure → human_review always
+4. **Measure everything** — reproducible evaluation with precision/recall/F1 per category
+5. **Honest about data** — every synthetic field is labeled; no fabricated metrics
+6. **Security by design** — untrusted text fields delimited as data in prompts, never instructions
+
+---
+
+*Built for Razorpay AI Buildathon · Track 04: AI Finance Controller*

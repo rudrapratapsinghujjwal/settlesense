@@ -1,0 +1,28 @@
+version: "3.8"
+
+services:
+  settlesense:
+    build: .
+    image: settlesense:latest
+    container_name: settlesense
+    ports:
+      - "7860:7860"
+    env_file:
+      - .env
+    volumes:
+      # Persist SQLite database across container restarts in local dev
+      # Note: On Hugging Face free tier, no persistent volume is available
+      - ./settlesense_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# Usage:
+#   docker-compose up --build        # Start with rebuild
+#   docker-compose up -d             # Start in background
+#   docker-compose logs -f           # Follow logs
+#   docker-compose down              # Stop

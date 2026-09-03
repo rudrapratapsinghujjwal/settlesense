@@ -1,0 +1,19 @@
+[server]
+headless = true
+port = 7860
+address = "0.0.0.0"
+fileWatcherType = "none"
+enableCORS = false
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false
+serverAddress = "localhost"
+
+[theme]
+base = "dark"
+backgroundColor = "#06080f"
+secondaryBackgroundColor = "#0d1117"
+textColor = "#e2e8f0"
+primaryColor = "#818cf8"
+font = "sans serif"

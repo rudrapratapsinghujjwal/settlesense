@@ -1,0 +1,16 @@
+{
+  "amount": 100000,
+  "amount_due": 100000,
+  "amount_paid": 0,
+  "attempts": 0,
+  "created_at": 1788113404,
+  "currency": "INR",
+  "entity": "order",
+  "id": "order_TW4iRZ4SWLtkLy",
+  "notes": {
+    "purpose": "settlesense_phase0_test"
+  },
+  "offer_id": null,
+  "receipt": "settlesense_test_1788113409",
+  "status": "created"
+}

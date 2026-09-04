@@ -455,12 +455,30 @@ def call_llm(
     latency_ms = (time.perf_counter() - start) * 1000
     logger.info("LLM call for %s: %.0fms", record_id, latency_ms)
 
-    # Extract JSON from response (handle markdown code blocks)
+    # ── Extract and clean JSON from response ────────────────────────────────
     if raw_response:
+        import re
         raw_response = raw_response.strip()
+
+        # Strip markdown code fences (```json ... ``` or ``` ... ```)
         if raw_response.startswith("```"):
             lines = raw_response.split("\n")
-            raw_response = "\n".join(lines[1:-1])
+            # Drop first line (```json) and last line (```)
+            inner = lines[1:]
+            if inner and inner[-1].strip() == "```":
+                inner = inner[:-1]
+            raw_response = "\n".join(inner).strip()
+
+        # Extract first JSON object if there's surrounding text
+        brace_start = raw_response.find("{")
+        brace_end = raw_response.rfind("}")
+        if brace_start != -1 and brace_end != -1:
+            raw_response = raw_response[brace_start:brace_end + 1]
+
+        # Fix trailing commas before } or ] — Gemini 2.5 Flash quirk
+        # e.g. {"a": 1,} or [1, 2,]
+        raw_response = re.sub(r",\s*([}\]])", r"\1", raw_response)
 
     result = validate_llm_output(raw_response or "{}", record_id, evidence)
     return result, latency_ms
+

@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import re
 import time
 import uuid
 from typing import Optional
@@ -39,6 +41,23 @@ from .types import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Rate limiter (for free-tier Gemini / OpenAI quota management)
+# ---------------------------------------------------------------------------
+
+_LLM_MIN_INTERVAL_S: float = 60.0 / max(1, int(os.getenv("LLM_RATE_LIMIT_RPM", "15")))
+_last_llm_call_time: float = 0.0
+
+def _rate_limit_wait() -> None:
+    """Block until enough time has passed since the last LLM call."""
+    global _last_llm_call_time
+    elapsed = time.perf_counter() - _last_llm_call_time
+    wait = _LLM_MIN_INTERVAL_S - elapsed
+    if wait > 0:
+        logger.debug("Rate limiter: sleeping %.2fs", wait)
+        time.sleep(wait)
+    _last_llm_call_time = time.perf_counter()
 
 # ---------------------------------------------------------------------------
 # Prompt versioning
@@ -384,6 +403,9 @@ def call_llm(
         latency_ms = (time.perf_counter() - start) * 1000
         return result, latency_ms
 
+    # Rate limit: throttle calls to avoid 429s on free-tier APIs
+    _rate_limit_wait()
+
     # Build user message
     user_msg = USER_PROMPT_TEMPLATE.format(
         record_id=record_id,
@@ -435,6 +457,60 @@ def call_llm(
             raise ValueError(f"Unknown LLM provider: {config.llm.provider}")
 
     except Exception as e:
+        err_str = str(e)
+        # Handle rate limit (429) — wait and retry once
+        if "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower():
+            retry_wait = 30.0
+            # Try to extract retry delay from error message
+            import re as _re
+            m = _re.search(r'retry.*?(\d+)s', err_str, _re.IGNORECASE)
+            if m:
+                retry_wait = min(float(m.group(1)) + 2, 120)
+            logger.warning(
+                "Rate limit (429) for %s — waiting %.0fs then retrying once",
+                record_id, retry_wait
+            )
+            time.sleep(retry_wait)
+            _rate_limit_wait()
+            try:
+                # Single retry
+                from openai import OpenAI as _OAI
+                _key = config.llm.openai_api_key
+                _is_g = _key.startswith("AQ.") or _key.startswith("AI")
+                _client = _OAI(
+                    api_key=_key,
+                    base_url="https://generativelanguage.googleapis.com/v1beta/openai/" if _is_g else None
+                )
+                _resp = _client.chat.completions.create(
+                    model=config.llm.model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_msg},
+                    ],
+                    max_tokens=2048, temperature=0.0,
+                )
+                raw_response = _resp.choices[0].message.content
+                # Process retry response below
+                if raw_response:
+                    import re as _re2
+                    raw_response = raw_response.strip()
+                    if raw_response.startswith("```"):
+                        _lines = raw_response.split("\n")
+                        _inner = _lines[1:]
+                        if _inner and _inner[-1].strip() == "```":
+                            _inner = _inner[:-1]
+                        raw_response = "\n".join(_inner).strip()
+                    _b1 = raw_response.find("{")
+                    _b2 = raw_response.rfind("}")
+                    if _b1 != -1 and _b2 != -1:
+                        raw_response = raw_response[_b1:_b2+1]
+                    raw_response = _re2.sub(r',\s*([}\]])', r'\1', raw_response)
+                latency_ms = (time.perf_counter() - start) * 1000
+                return validate_llm_output(raw_response or "{}", record_id, evidence), latency_ms
+            except Exception as retry_e:
+                logger.error("Retry also failed for %s: %s", record_id, retry_e)
+                e = retry_e
+
         logger.error("LLM API call failed for %s: %s — falling back to mock", record_id, e)
         result = _mock_classify(record_id, exception_txn, candidates, evidence, hint_category)
         result = LLMOutput(

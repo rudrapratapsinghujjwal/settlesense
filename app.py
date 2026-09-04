@@ -489,10 +489,17 @@ def sidebar() -> str:
     sb.markdown('<hr style="border-color:#1e2433;margin:16px 0">', unsafe_allow_html=True)
 
     provider_color = "#fb923c" if config.llm.provider == "mock" else "#34d399"
+    # Display friendly name for Google AI / Gemini
+    _key = config.llm.openai_api_key or ""
+    _is_google = _key.startswith("AQ.") or _key.startswith("AI")
+    provider_label = (
+        "GEMINI" if (config.llm.provider == "openai" and _is_google)
+        else config.llm.provider.upper()
+    )
     sb.markdown(f"""
     <div style="font-size:0.72rem;line-height:2;color:#64748b">
       <span style="color:#475569;font-weight:600">Provider</span><br>
-      <span style="color:{provider_color};font-weight:700">{config.llm.provider.upper()}</span>
+      <span style="color:{provider_color};font-weight:700">{provider_label}</span>
       {'<span style="color:#64748b"> · ' + config.llm.model + '</span>' if config.llm.provider != "mock" else ''}<br>
       <span style="color:#475569;font-weight:600">Threshold</span>
       <span style="color:#818cf8;font-weight:700"> {config.confidence_threshold:.0%}</span><br>
@@ -589,7 +596,10 @@ def view_overview(conn):
     else:
         kpi(c8, "—", "Classification Acc", "kv-slate", "Run evaluation")
     kpi(c9, _pct(config.confidence_threshold), "Confidence Gate", "kv-indigo", "Logistic regression")
-    kpi(c10, config.llm.provider.upper(), "LLM Provider", "kv-blue" if config.llm.provider != "mock" else "kv-amber")
+    _pkey = config.llm.openai_api_key or ""
+    _plabel = "GEMINI" if (config.llm.provider == "openai" and (_pkey.startswith("AQ.") or _pkey.startswith("AI"))) else config.llm.provider.upper()
+    kpi(c10, _plabel, "LLM Provider", "kv-blue" if config.llm.provider != "mock" else "kv-amber")
+
 
     st.markdown("<br>", unsafe_allow_html=True)
 

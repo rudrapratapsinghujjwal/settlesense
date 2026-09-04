@@ -409,18 +409,27 @@ def call_llm(
             raw_response = message.content[0].text
 
         elif config.llm.provider == "openai":
-            import openai
-            client = openai.OpenAI(api_key=config.llm.openai_api_key)
+            from openai import OpenAI
+            # Google AI Studio key? Use Gemini-compatible endpoint.
+            # Real OpenAI key? Use standard endpoint (override base_url won't hurt).
+            key = config.llm.openai_api_key
+            is_google_key = key.startswith("AQ.") or key.startswith("AI")
+            base_url = (
+                "https://generativelanguage.googleapis.com/v1beta/openai/"
+                if is_google_key else None
+            )
+            client = OpenAI(api_key=key, base_url=base_url)
             resp = client.chat.completions.create(
                 model=config.llm.model,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_msg},
                 ],
-                max_tokens=1024,
+                max_tokens=2048,
                 temperature=0.0,
             )
             raw_response = resp.choices[0].message.content
+
 
         else:
             raise ValueError(f"Unknown LLM provider: {config.llm.provider}")

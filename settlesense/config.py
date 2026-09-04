@@ -53,8 +53,13 @@ class LLMConfig:
             return bool(self.anthropic_api_key
                         and not self.anthropic_api_key.startswith("sk-ant-XXX"))
         if self.provider == "openai":
-            return bool(self.openai_api_key
-                        and not self.openai_api_key.startswith("sk-XXX"))
+            # Accept OpenAI (sk-...) or Google AI Studio (AQ. ...) keys
+            key = self.openai_api_key
+            return bool(key and (
+                key.startswith("sk-") or
+                key.startswith("AQ.") or
+                key.startswith("AI")
+            ) and len(key) > 20)
         return False
 
 
@@ -96,6 +101,10 @@ def load_config() -> AppConfig:
         # OpenAI keys: sk-...  or sk-proj-...
         return bool(k) and k.startswith("sk-") and len(k) > 30
 
+    def _valid_google_key(k: str) -> bool:
+        # Google AI Studio keys: AQ.Ab8... (used via OpenAI-compatible Gemini endpoint)
+        return bool(k) and (k.startswith("AQ.") or k.startswith("AI")) and len(k) > 20
+
     if provider == "mock":
         if _valid_anthropic_key(anthropic_key):
             provider = "anthropic"
@@ -103,11 +112,16 @@ def load_config() -> AppConfig:
         elif _valid_openai_key(openai_key):
             provider = "openai"
             logger.info("Auto-detected OPENAI_API_KEY — using openai provider.")
+        elif _valid_google_key(openai_key):
+            # Google AI Studio key supplied as OPENAI_API_KEY — use Gemini via OpenAI compat
+            provider = "openai"
+            logger.info("Auto-detected Google AI Studio key (OPENAI_API_KEY) — using openai/gemini provider.")
         else:
             if anthropic_key or openai_key:
                 logger.warning(
-                    "API key found but format is invalid (Anthropic keys start with 'sk-ant-', "
-                    "OpenAI keys start with 'sk-'). Staying in mock mode."
+                    "API key found but format is unrecognized. "
+                    "Anthropic keys start with 'sk-ant-', OpenAI with 'sk-', Google AI with 'AQ.'. "
+                    "Staying in mock mode."
                 )
             else:
                 logger.warning(

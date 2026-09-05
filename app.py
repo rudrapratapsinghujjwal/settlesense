@@ -1008,8 +1008,8 @@ def view_audit(conn):
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    with st.spinner("Initialising SettleSense pipeline…"):
-        _startup()
+    # with st.spinner("Initialising SettleSense pipeline…"):
+    #     _startup()
     conn = _conn()
     page = sidebar()
 

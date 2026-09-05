@@ -132,7 +132,8 @@ def load_config() -> AppConfig:
 
     llm_cfg = LLMConfig(
         provider=provider,
-        model=os.getenv("LLM_MODEL", "claude-3-5-sonnet-20241022"),
+        model=os.getenv("LLM_MODEL", "gemini-3.5-flash-lite"),
+
         anthropic_api_key=anthropic_key,
         openai_api_key=openai_key,
     )
